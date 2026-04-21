@@ -5,6 +5,10 @@ const Game2048 = {
   score: 0,
   gameOver: false,
   gameWon: false,
+  canvas: null,
+  ctx: null,
+  windowWidth: 0,
+  windowHeight: 0,
   
   // 颜色配置
   colors: {
@@ -26,23 +30,78 @@ const Game2048 = {
   
   // 初始化游戏
   init: function() {
-    this.board = Array(4).fill().map(() => Array(4).fill(0));
-    this.score = 0;
-    this.gameOver = false;
-    this.gameWon = false;
+    console.log('Game2048.init 开始执行');
     
-    // 添加两个初始数字
-    this.addRandomTile();
-    this.addRandomTile();
-    
-    // 渲染游戏
-    this.render();
-    
-    // 监听键盘事件
-    this.listenToKeyboard();
-    
-    // 监听触摸事件（移动端）
-    this.listenToTouch();
+    try {
+      // 获取系统信息
+      const systemInfo = wx.getSystemInfoSync();
+      this.windowWidth = systemInfo.windowWidth;
+      this.windowHeight = systemInfo.windowHeight;
+      console.log('系统信息:', this.windowWidth, 'x', this.windowHeight);
+      
+      // 初始化Canvas
+      this.initCanvas();
+      
+      // 初始化游戏状态
+      this.board = Array(4).fill().map(() => Array(4).fill(0));
+      this.score = 0;
+      this.gameOver = false;
+      this.gameWon = false;
+      
+      // 添加两个初始数字
+      this.addRandomTile();
+      this.addRandomTile();
+      
+      // 渲染游戏
+      this.render();
+      
+      // 监听键盘事件
+      this.listenToKeyboard();
+      
+      // 监听触摸事件（移动端）
+      this.listenToTouch();
+      
+      console.log('Game2048.init 执行完成');
+    } catch (error) {
+      console.error('Game2048.init 出错:', error);
+      this.showError(error);
+    }
+  },
+  
+  // 初始化Canvas
+  initCanvas: function() {
+    console.log('初始化Canvas');
+    try {
+      // 创建Canvas（只创建一次）
+      this.canvas = wx.createCanvas();
+      this.ctx = this.canvas.getContext('2d');
+      
+      // 设置Canvas尺寸
+      this.canvas.width = this.windowWidth;
+      this.canvas.height = this.windowHeight;
+      
+      console.log('Canvas初始化成功:', this.canvas.width, 'x', this.canvas.height);
+    } catch (error) {
+      console.error('Canvas初始化失败:', error);
+      throw error;
+    }
+  },
+  
+  // 显示错误信息
+  showError: function(error) {
+    try {
+      // 绘制错误信息到Canvas
+      if (this.ctx) {
+        this.ctx.fillStyle = '#ffffff';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillStyle = '#ff0000';
+        this.ctx.font = '20px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('错误: ' + error.message, this.canvas.width / 2, this.canvas.height / 2);
+      }
+    } catch (e) {
+      console.error('显示错误信息失败:', e);
+    }
   },
   
   // 添加随机数字
@@ -60,12 +119,15 @@ const Game2048 = {
       const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
       // 90%概率生成2，10%概率生成4
       this.board[randomCell.row][randomCell.col] = Math.random() < 0.9 ? 2 : 4;
+      console.log('添加随机数字:', this.board[randomCell.row][randomCell.col], '位置:', randomCell.row, randomCell.col);
     }
   },
   
   // 移动和合并数字
   move: function(direction) {
     if (this.gameOver || this.gameWon) return;
+    
+    console.log('移动方向:', direction);
     
     let moved = false;
     const merged = Array(4).fill().map(() => Array(4).fill(false));
@@ -85,6 +147,8 @@ const Game2048 = {
         moved = this.moveRight(merged);
         break;
     }
+    
+    console.log('是否移动:', moved);
     
     // 如果有移动，添加新数字
     if (moved) {
@@ -337,42 +401,48 @@ const Game2048 = {
   
   // 渲染游戏
   render: function() {
-    // 这里我们使用Canvas来渲染游戏
-    this.renderCanvas();
+    console.log('开始渲染游戏');
+    try {
+      // 使用Canvas来渲染游戏
+      this.renderCanvas();
+      console.log('游戏渲染完成');
+    } catch (error) {
+      console.error('游戏渲染失败:', error);
+      this.showError(error);
+    }
   },
   
   // 使用Canvas渲染
   renderCanvas: function() {
-    // 创建Canvas上下文
-    const canvas = wx.createCanvas();
-    const ctx = canvas.getContext('2d');
-    
-    // 清空画布
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!this.ctx || !this.canvas) {
+      console.error('Canvas未初始化');
+      return;
+    }
     
     // 计算缩放比例，确保游戏在不同屏幕尺寸上都能正常显示
-    const windowWidth = wx.getSystemInfoSync().windowWidth;
-    const gameSize = windowWidth - 40; // 两边各留20px边距
+    const gameSize = this.windowWidth - 40; // 两边各留20px边距
     const cellSize = (gameSize - 30) / 4; // 5个间距，每个5px
-    const startX = (canvas.width - gameSize) / 2;
+    const startX = (this.canvas.width - gameSize) / 2;
     const startY = 100; // 顶部留一些空间显示分数
     
+    console.log('渲染参数:', {gameSize, cellSize, startX, startY, canvasWidth: this.canvas.width, canvasHeight: this.canvas.height});
+    
     // 绘制背景
-    ctx.fillStyle = '#faf8ef';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    this.ctx.fillStyle = '#faf8ef';
+    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
     
     // 绘制标题和分数
-    ctx.fillStyle = '#776e65';
-    ctx.font = 'bold 40px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('2048', canvas.width / 2, 60);
+    this.ctx.fillStyle = '#776e65';
+    this.ctx.font = 'bold 40px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText('2048', this.canvas.width / 2, 60);
     
-    ctx.font = '20px Arial';
-    ctx.fillText(`分数: ${this.score}`, canvas.width / 2, 90);
+    this.ctx.font = '20px Arial';
+    this.ctx.fillText(`分数: ${this.score}`, this.canvas.width / 2, 90);
     
     // 绘制游戏板背景
-    ctx.fillStyle = this.colors.background;
-    ctx.fillRect(startX, startY, gameSize, gameSize);
+    this.ctx.fillStyle = this.colors.background;
+    this.ctx.fillRect(startX, startY, gameSize, gameSize);
     
     // 绘制格子
     for (let i = 0; i < 4; i++) {
@@ -382,16 +452,16 @@ const Game2048 = {
         const value = this.board[i][j];
         
         // 绘制格子背景
-        ctx.fillStyle = value ? this.colors[value] : this.colors.cell;
-        ctx.fillRect(x, y, cellSize, cellSize);
+        this.ctx.fillStyle = value ? this.colors[value] : this.colors.cell;
+        this.ctx.fillRect(x, y, cellSize, cellSize);
         
         // 绘制数字
         if (value) {
-          ctx.fillStyle = value <= 4 ? this.colors.text : '#f9f6f2';
-          ctx.font = value < 100 ? 'bold 24px Arial' : value < 1000 ? 'bold 20px Arial' : 'bold 16px Arial';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillText(value, x + cellSize / 2, y + cellSize / 2);
+          this.ctx.fillStyle = value <= 4 ? this.colors.text : '#f9f6f2';
+          this.ctx.font = value < 100 ? 'bold 24px Arial' : value < 1000 ? 'bold 20px Arial' : 'bold 16px Arial';
+          this.ctx.textAlign = 'center';
+          this.ctx.textBaseline = 'middle';
+          this.ctx.fillText(value, x + cellSize / 2, y + cellSize / 2);
         }
       }
     }
@@ -399,20 +469,19 @@ const Game2048 = {
     // 绘制重新开始按钮
     const btnWidth = 120;
     const btnHeight = 40;
-    const btnX = (canvas.width - btnWidth) / 2;
+    const btnX = (this.canvas.width - btnWidth) / 2;
     const btnY = startY + gameSize + 20;
     
-    ctx.fillStyle = '#8f7a66';
-    ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
+    this.ctx.fillStyle = '#8f7a66';
+    this.ctx.fillRect(btnX, btnY, btnWidth, btnHeight);
     
-    ctx.fillStyle = '#f9f6f2';
-    ctx.font = 'bold 16px Arial';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('重新开始', btnX + btnWidth / 2, btnY + btnHeight / 2);
+    this.ctx.fillStyle = '#f9f6f2';
+    this.ctx.font = 'bold 16px Arial';
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('重新开始', btnX + btnWidth / 2, btnY + btnHeight / 2);
     
-    // 保存Canvas引用，用于后续点击检测
-    this.canvas = canvas;
+    // 保存按钮位置，用于后续点击检测
     this.btnX = btnX;
     this.btnY = btnY;
     this.btnWidth = btnWidth;
@@ -421,7 +490,9 @@ const Game2048 = {
   
   // 监听键盘事件
   listenToKeyboard: function() {
+    console.log('监听键盘事件');
     wx.onKeyDown((res) => {
+      console.log('键盘事件:', res.keyCode);
       switch (res.keyCode) {
         case 38: // 上
           this.move('up');
@@ -441,26 +512,32 @@ const Game2048 = {
   
   // 监听触摸事件
   listenToTouch: function() {
+    console.log('监听触摸事件');
     let startX, startY;
     
     wx.onTouchStart((res) => {
+      console.log('触摸开始:', res.touches[0].clientX, res.touches[0].clientY);
       startX = res.touches[0].clientX;
       startY = res.touches[0].clientY;
       
       // 检查是否点击了重新开始按钮
       if (this.canvas) {
-        const canvasRect = this.canvas.getBoundingClientRect();
-        const touchX = res.touches[0].clientX - canvasRect.left;
-        const touchY = res.touches[0].clientY - canvasRect.top;
+        const touchX = res.touches[0].clientX;
+        const touchY = res.touches[0].clientY;
+        
+        console.log('点击位置:', touchX, touchY);
+        console.log('按钮位置:', this.btnX, this.btnY, this.btnWidth, this.btnHeight);
         
         if (touchX >= this.btnX && touchX <= this.btnX + this.btnWidth &&
             touchY >= this.btnY && touchY <= this.btnY + this.btnHeight) {
+          console.log('点击了重新开始按钮');
           this.init();
         }
       }
     });
     
     wx.onTouchEnd((res) => {
+      console.log('触摸结束');
       if (!startX || !startY) return;
       
       const endX = res.changedTouches[0].clientX;
@@ -468,6 +545,8 @@ const Game2048 = {
       
       const deltaX = endX - startX;
       const deltaY = endY - startY;
+      
+      console.log('滑动距离:', deltaX, deltaY);
       
       // 确定滑动方向
       if (Math.abs(deltaX) > Math.abs(deltaY)) {
@@ -488,4 +567,5 @@ const Game2048 = {
   }
 };
 
+console.log('Game2048模块加载完成');
 module.exports = Game2048;
