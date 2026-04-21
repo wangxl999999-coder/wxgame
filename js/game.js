@@ -9,6 +9,7 @@ const Game2048 = {
   ctx: null,
   windowWidth: 0,
   windowHeight: 0,
+  listenersRegistered: false, // 标志位，确保事件监听器只注册一次
   
   // 颜色配置
   colors: {
@@ -39,8 +40,10 @@ const Game2048 = {
       this.windowHeight = systemInfo.windowHeight;
       console.log('系统信息:', this.windowWidth, 'x', this.windowHeight);
       
-      // 初始化Canvas
-      this.initCanvas();
+      // 初始化Canvas（只创建一次）
+      if (!this.canvas) {
+        this.initCanvas();
+      }
       
       // 初始化游戏状态
       this.board = Array(4).fill().map(() => Array(4).fill(0));
@@ -55,11 +58,13 @@ const Game2048 = {
       // 渲染游戏
       this.render();
       
-      // 监听键盘事件
-      this.listenToKeyboard();
-      
-      // 监听触摸事件（移动端）
-      this.listenToTouch();
+      // 监听键盘和触摸事件（只注册一次）
+      if (!this.listenersRegistered) {
+        this.listenToKeyboard();
+        this.listenToTouch();
+        this.listenersRegistered = true;
+        console.log('事件监听器已注册');
+      }
       
       console.log('Game2048.init 执行完成');
     } catch (error) {
@@ -486,6 +491,8 @@ const Game2048 = {
     this.btnY = btnY;
     this.btnWidth = btnWidth;
     this.btnHeight = btnHeight;
+    
+    console.log('按钮位置:', {btnX, btnY, btnWidth, btnHeight});
   },
   
   // 监听键盘事件
@@ -514,24 +521,26 @@ const Game2048 = {
   listenToTouch: function() {
     console.log('监听触摸事件');
     let startX, startY;
+    let isTap = false; // 标记是否是点击（不是滑动）
     
     wx.onTouchStart((res) => {
       console.log('触摸开始:', res.touches[0].clientX, res.touches[0].clientY);
       startX = res.touches[0].clientX;
       startY = res.touches[0].clientY;
-      
-      // 检查是否点击了重新开始按钮
-      if (this.canvas) {
-        const touchX = res.touches[0].clientX;
-        const touchY = res.touches[0].clientY;
+      isTap = true; // 初始假设是点击
+    });
+    
+    wx.onTouchMove((res) => {
+      // 如果有移动，标记不是点击
+      if (isTap) {
+        const moveX = res.touches[0].clientX;
+        const moveY = res.touches[0].clientY;
+        const deltaX = Math.abs(moveX - startX);
+        const deltaY = Math.abs(moveY - startY);
         
-        console.log('点击位置:', touchX, touchY);
-        console.log('按钮位置:', this.btnX, this.btnY, this.btnWidth, this.btnHeight);
-        
-        if (touchX >= this.btnX && touchX <= this.btnX + this.btnWidth &&
-            touchY >= this.btnY && touchY <= this.btnY + this.btnHeight) {
-          console.log('点击了重新开始按钮');
-          this.init();
+        // 如果移动距离超过10px，认为是滑动
+        if (deltaX > 10 || deltaY > 10) {
+          isTap = false;
         }
       }
     });
@@ -543,6 +552,27 @@ const Game2048 = {
       const endX = res.changedTouches[0].clientX;
       const endY = res.changedTouches[0].clientY;
       
+      console.log('结束位置:', endX, endY);
+      console.log('是点击:', isTap);
+      console.log('按钮位置:', this.btnX, this.btnY, this.btnWidth, this.btnHeight);
+      
+      // 如果是点击，检查是否点击了重新开始按钮
+      if (isTap && this.btnX !== undefined) {
+        // 检查点击位置是否在按钮范围内
+        if (endX >= this.btnX && endX <= this.btnX + this.btnWidth &&
+            endY >= this.btnY && endY <= this.btnY + this.btnHeight) {
+          console.log('点击了重新开始按钮');
+          // 延迟一点执行，避免触摸事件冲突
+          setTimeout(() => {
+            this.init();
+          }, 50);
+          startX = null;
+          startY = null;
+          return;
+        }
+      }
+      
+      // 处理滑动
       const deltaX = endX - startX;
       const deltaY = endY - startY;
       
